@@ -1,4 +1,4 @@
-# 💬 Implement Chat in your E-Commerce iOS App with Stream [![](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)](https://twitter.com/intent/tweet?text=Want%20to%20implement%20chat%20in%20your%20e-commerce%20iOS%20app%3F%20Learn%20how%3A&url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)
+# 💬 Implement Chat in your E-Commerce iOS App [![](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)](https://twitter.com/intent/tweet?text=Want%20to%20implement%20chat%20in%20your%20e-commerce%20iOS%20app%3F%20Learn%20how%3A&url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)
 
 <img align="right" src="https://i.imgur.com/T7AnZmR.png" width="50%" />
 
@@ -15,11 +15,11 @@ This repository contains the completed Xcode project following the [How to Imple
 
 ### Configuration
 
-You should place your [Stream Chat](https://getstream.io/chat/) credentials in [`AppDelegate.swift`](ECommerceApp/ECommerceApp/AppDelegate.swift#L18).
+You should place your [Stream Chat](https://getstream.io/chat/) credentials in [`AppDelegate.swift`](ECommerceApp/AppDelegate.swift#L18).
 
 ### Dependencies
 
-To install the dependencies, use CocoaPods in the ECommerceApp folder:
+To install the dependencies, use CocoaPods in the project's root folder:
 
 ```bash
 $ pod install --repo-update

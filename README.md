@@ -1,6 +1,6 @@
 # 💬 Implement Chat in your E-Commerce iOS App [![](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)](https://twitter.com/intent/tweet?text=Want%20to%20implement%20chat%20in%20your%20e-commerce%20iOS%20app%3F%20Learn%20how%3A&url=https%3A%2F%2Fgithub.com%2FGetStream%2Fe-commerce-chat-ios)
 
-<img align="right" src="https://i.imgur.com/T7AnZmR.png" width="50%" />
+<img align="right" src="https://i.imgur.com/JHm5Nx1.png" width="50%" />
 
 ## 📚 Tutorial
 

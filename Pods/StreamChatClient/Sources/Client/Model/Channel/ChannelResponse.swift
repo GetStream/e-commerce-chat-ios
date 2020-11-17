@@ -9,11 +9,12 @@
 import Foundation
 
 /// A channel response.
-public struct ChannelResponse: Decodable {
+public struct ChannelResponse: Decodable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case channel
         case messages
         case messageReads = "read"
+        case membership
         case members
         case watchers
         case watcherCount = "watcher_count"
@@ -29,6 +30,7 @@ public struct ChannelResponse: Decodable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         channel = try container.decode(Channel.self, forKey: .channel)
+        channel.membership = try container.decodeIfPresent(Member.self, forKey: .membership)
         messages = try container.decodeIfPresent([Message].self, forKey: .messages) ?? []
         messageReads = try container.decodeIfPresent([MessageRead].self, forKey: .messageReads) ?? []
         
@@ -70,9 +72,7 @@ public struct ChannelResponse: Decodable {
     }
     
     private func calculateChannelUnreadCount() {
-        if messages.isEmpty || !channel.members.contains(Member.current) {
-            return
-        }
+        guard !messages.isEmpty, channel.readEventsEnabled else { return }
         
         let unreadMessageRead = userUnreadMessageRead()
         channel.unreadMessageReadAtomic.set(unreadMessageRead)
@@ -145,4 +145,8 @@ public enum InviteAnswer: String {
     case notFound
     case accepted
     case rejected
+}
+
+public struct MembersQueryResponse: Decodable {
+    public let members: [Member]
 }

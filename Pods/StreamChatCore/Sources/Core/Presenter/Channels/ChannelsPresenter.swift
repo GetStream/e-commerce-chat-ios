@@ -88,6 +88,30 @@ public extension ChannelsPresenter {
               _ completion: @escaping Client.Completion<EmptyData> = { _ in }) {
         rx.hide(channelPresenter, clearHistory: clearHistory).asObservable().bindOnce(to: completion)
     }
+    
+    /// Mutes a channel from a given `ChannelPresenter`.
+    /// - Parameter channelPresenter: a channel presenter.
+    func mute(_ channelPresenter: ChannelPresenter,
+              _ completion: @escaping Client.Completion<MutedChannelResponse> = { _ in }) {
+        rx.mute(channelPresenter).bindOnce(to: completion)
+    }
+    
+    /// Unmutes a channel from a given `ChannelPresenter`.
+    /// - Parameter channelPresenter: a channel presenter.
+    func unmute(_ channelPresenter: ChannelPresenter,
+                _ completion: @escaping Client.Completion<EmptyData> = { _ in }) {
+        rx.unmute(channelPresenter).bindOnce(to: completion)
+    }
+    
+    /// Delete a channel and remove the channel presenter from items.
+    ///
+    /// - Parameters:
+    ///   - channelPresenter: a channel presenter.
+    ///   - completion: an empty completion block.
+    func delete(_ channelPresenter: ChannelPresenter,
+                _ completion: @escaping Client.Completion<Channel> = { _ in }) {
+        rx.delete(channelPresenter).asObservable().bindOnce(to: completion)
+    }
 }
 
 // MARK: - Response Parsing
@@ -155,8 +179,8 @@ extension ChannelsPresenter {
                 return Observable.just(.itemRemoved(index, items))
             }
             
-        case .messageNew:
-            return parseNewMessage(event: event)
+        case .messageNew, .messageUpdated:
+            return parseMessage(event: event)
             
         case .messageDeleted(let message, _, _, _):
             if let index = items.firstIndex(where: cid),
@@ -194,7 +218,7 @@ extension ChannelsPresenter {
         return Observable.just(.none)
     }
     
-    private func parseNewMessage(event: StreamChatClient.Event) -> Observable<ViewChanges> {
+    private func parseMessage(event: StreamChatClient.Event) -> Observable<ViewChanges> {
         guard let cid = event.cid,
             let index = items.firstIndex(where: cid),
             let channelPresenter = items.remove(at: index).channelPresenter else {

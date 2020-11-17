@@ -181,15 +181,10 @@ public final class Client: Uploader {
     ///   - config: the configuration object with details of how the new instance should be set up.
     ///   - defaultURLSessionConfiguration: the base URLSession configuration `Client` uses for its URL sessions.
     ///                                     `Client` is allowed to override the configuration with its own settings.
-    ///   - defaultWebSocketProviderType: the default WebSocket provider type. `Client` will create it on set user.
+    ///   - defaultWebSocketProviderType: the default WebSocket provider type. `Client` will create it on set user. `config.defaultWebSocketProviderType` will override this.
     init(config: Client.Config,
          defaultURLSessionConfiguration: URLSessionConfiguration = .default,
-         defaultWebSocketProviderType: WebSocketProvider.Type = {
-        if #available(iOS 13, *) {
-            return URLSessionWebSocketProvider.self
-        }
-        return StarscreamWebSocketProvider.self
-        }()) {
+         defaultWebSocketProviderType: WebSocketProvider.Type? = nil) {
         apiKey = config.apiKey
         baseURL = config.baseURL
         callbackQueue = config.callbackQueue ?? .global(qos: .userInitiated)
@@ -199,7 +194,19 @@ public final class Client: Uploader {
         logger = logOptions.logger(icon: "🐴", for: [.requestsError, .requests, .requestsInfo])
         
         self.defaultURLSessionConfiguration = defaultURLSessionConfiguration
-        self.defaultWebSocketProviderType = defaultWebSocketProviderType
+        
+        if let defaultWebSocketProviderType = defaultWebSocketProviderType {
+            self.defaultWebSocketProviderType = defaultWebSocketProviderType
+        } else if #available(iOS 13, *) {
+            switch config.webSocketProviderType {
+            case .native:
+                self.defaultWebSocketProviderType = URLSessionWebSocketProvider.self
+            case .starscream:
+                self.defaultWebSocketProviderType = StarscreamWebSocketProvider.self
+            }
+        } else {
+            self.defaultWebSocketProviderType = StarscreamWebSocketProvider.self
+        }
         
         // Init the WebSocket to register subscriptions when the Client is initiated.
         _ = webSocket
@@ -248,6 +255,12 @@ public final class Client: Uploader {
         
         if appState == .active {
             webSocket.connect()
+            
+            // The improve latency, call the preheat endpoint to set up TCP connection which can be reused.
+            self.request(endpoint: .users(.init(filter: .none))) { (_: Result<EmptyData, ClientError>) in
+                self.logger?.log("♨️ TCP connection heated up.")
+            }
+            
         } else if appState == .background, webSocket.isConnected {
             webSocket.disconnectInBackground()
         }

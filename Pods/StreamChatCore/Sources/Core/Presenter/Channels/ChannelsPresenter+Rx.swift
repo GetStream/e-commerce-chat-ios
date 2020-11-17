@@ -43,6 +43,29 @@ public extension Reactive where Base == ChannelsPresenter {
             .do(onNext: { [weak base] _ in base?.rx.removeFromItems(channelPresenter) })
             .asDriver(onErrorJustReturn: .empty)
     }
+    
+    /// Mutes a channel from a given `ChannelPresenter`.
+    /// - Parameter channelPresenter: a channel presenter.
+    func mute(_ channelPresenter: ChannelPresenter) -> Observable<MutedChannelResponse> {
+        channelPresenter.channel.rx.mute()
+    }
+    
+    /// Unmutes a channel from a given `ChannelPresenter`.
+    /// - Parameter channelPresenter: a channel presenter.
+    func unmute(_ channelPresenter: ChannelPresenter) -> Observable<EmptyData> {
+        channelPresenter.channel.rx.unmute()
+    }
+    
+    /// Delete a channel and remove a channel presenter from items.
+    ///
+    /// - Parameters:
+    ///   - channelPresenter: a channel presenter.
+    func delete(_ channelPresenter: ChannelPresenter) -> Driver<Channel> {
+        channelPresenter.channel.rx
+            .delete()
+            .do(onNext: { [weak base] _ in base?.rx.removeFromItems(channelPresenter) })
+            .asDriver(onErrorJustReturn: .unused)
+    }
 }
 
 private extension Reactive where Base == ChannelsPresenter {

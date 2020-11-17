@@ -111,16 +111,24 @@ public final class AvatarView: EscapeBridgingImageView<Void>, Reusable {
         avatarLabel.isHidden = false
         let unwrappedName = (name ?? "?")
         let name = unwrappedName.isEmpty ? "?" : unwrappedName
-        let words = name.split(separator: " ")
         
-        if words.count == 2, let a = String(describing: words[0]).first, let b = String(describing: words[1]).first {
-            avatarLabel.text = String(a).appending(String(b)).uppercased()
-        } else {
-            avatarLabel.text = (name.prefix(1) + name.suffix(1)).uppercased()
+        switch style.placeholderTextStyle {
+        case .initials:
+            let words = name.split(separator: " ")
+            
+            if words.count == 2, let a = String(describing: words[0]).first, let b = String(describing: words[1]).first {
+                avatarLabel.text = String(a).appending(String(b)).uppercased()
+            } else {
+                avatarLabel.text = (name.prefix(1) + name.suffix(1)).uppercased()
+            }
+        case .firstLetter:
+            avatarLabel.text = name.prefix(1).uppercased()
         }
         
         if let textColor = style.placeholderTextColor {
             avatarLabel.textColor = textColor
+        } else if let provider = style.placeholderTextColorProvider {
+            avatarLabel.textColor = provider(name)
         } else if #available(iOS 13, *) {
             avatarLabel.textColor = UIColor(dynamicProvider: { trait -> UIColor in
                 UIColor.color(by: name, isDark: trait.userInterfaceStyle == .dark).withAlphaComponent(0.8)
@@ -131,6 +139,8 @@ public final class AvatarView: EscapeBridgingImageView<Void>, Reusable {
         
         if let backgroundColor = style.placeholderBackgroundColor {
             avatarLabel.backgroundColor = backgroundColor
+        } else if let provider = style.placeholderBackgroundColorProvider {
+            avatarLabel.backgroundColor = provider(name)
         } else if #available(iOS 13, *) {
             avatarLabel.backgroundColor = UIColor(dynamicProvider: { [weak self] trait -> UIColor in
                 (self?.backgroundColor ?? .white)

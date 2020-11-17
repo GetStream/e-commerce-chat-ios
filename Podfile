@@ -6,5 +6,5 @@ target 'ECommerceApp' do
   use_frameworks!
 
   # Pods for ECommerceApp
-  pod 'StreamChat', '~> 2.2'
+  pod 'StreamChat', '~> 2.4.2'
 end

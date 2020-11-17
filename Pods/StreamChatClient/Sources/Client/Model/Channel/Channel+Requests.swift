@@ -79,6 +79,20 @@ public extension Channel {
         Client.shared.show(channel: self, completion)
     }
     
+    /// Mutes a channel.
+    /// - Parameter completion: an empty completion block.
+    @discardableResult
+    func mute(_ completion: @escaping Client.Completion<MutedChannelResponse> = { _ in }) -> Cancellable {
+        Client.shared.mute(channel: self, completion)
+    }
+    
+    /// Unmutes a channel.
+    /// - Parameter completion: an empty completion block.
+    @discardableResult
+    func unmute(_ completion: @escaping Client.Completion<EmptyData> = { _ in }) -> Cancellable {
+        Client.shared.unmute(channel: self, completion)
+    }
+    
     /// Update channel data.
     /// - Parameters:
     ///   - name: a channel name.
@@ -270,6 +284,37 @@ public extension Channel {
         Client.shared.remove(members: members, from: self, completion)
     }
     
+    /// Query this channel's members.
+    /// - Parameters:
+    ///   - filter: Filter conditions for query
+    ///   - sorting: Sorting conditions for query
+    ///   - limit: Limit for number of members to return. Defaults to 100.
+    ///   - offset: Offset of pagination. Defaults to 0.
+    ///   - completion: Completion block with `MembersQueryResponse`
+    @discardableResult
+    func queryMembers(filter: Filter,
+                      sorting: [Sorting] = [],
+                      limit: Int = 100,
+                      offset: Int = 0,
+                      _ completion: @escaping Client.Completion<MembersQueryResponse>) -> Cancellable {
+        let query: MembersQuery
+        if id.isEmpty {
+            query = MembersQuery(channelType: type,
+                                 members: Array(members),
+                                 filter: filter,
+                                 sorting: sorting,
+                                 limit: limit,
+                                 offset: offset)
+        } else {
+            query = MembersQuery(channelId: cid,
+                                 filter: filter,
+                                 sorting: sorting,
+                                 limit: limit,
+                                 offset: offset)
+        }
+        return Client.shared.queryMembers(membersQuery: query, completion)
+    }
+    
     // MARK: - User Ban
     
     /// Ban a user.
@@ -393,5 +438,23 @@ public extension Channel {
     @discardableResult
     func deleteFile(url: URL, _ completion: @escaping Client.Completion<EmptyData> = { _ in }) -> Cancellable {
         Client.shared.deleteFile(url: url, channel: self, completion)
+    }
+    
+    /// Enable slow mode for the channel
+    /// - Parameters:
+    ///   - cooldown: Cooldown duration in seconds. (1-120)
+    ///   - completion: an empty completion block.
+    @discardableResult
+    func enableSlowMode(cooldown: Int,
+                        _ completion: @escaping Client.Completion<EmptyData> = { _ in }) -> Cancellable {
+        Client.shared.enableSlowMode(for: self, cooldown: cooldown, completion)
+    }
+    
+    /// Disables slow mode for the channel
+    /// - Parameters:
+    ///   - completion: an empty completion block.
+    @discardableResult
+    func disableSlowMode(_ completion: @escaping Client.Completion<EmptyData> = { _ in }) -> Cancellable {
+        Client.shared.disableSlowMode(for: self, completion)
     }
 }

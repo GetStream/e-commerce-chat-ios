@@ -17,7 +17,6 @@ extension Channel: ReactiveCompatible {}
 public extension Reactive where Base == Channel {
     
     /// Create a channel.
-    /// - Parameter completion: a completion block with `ChannelResponse`.
     @discardableResult
     func create() -> Observable<ChannelResponse> {
         Client.shared.rx.create(channel: base)
@@ -63,8 +62,18 @@ public extension Reactive where Base == Channel {
     /// Removes the hidden status for a channel.
     /// - Parameters:
     ///   - user: the current user.
-    func show(_ completion: @escaping Client.Completion<EmptyData> = { _ in }) -> Observable<EmptyData> {
+    func show() -> Observable<EmptyData> {
         Client.shared.rx.show(channel: base)
+    }
+    
+    /// Mutes a channel.
+    func mute() -> Observable<MutedChannelResponse> {
+        Client.shared.rx.mute(channel: base)
+    }
+    
+    /// Unmutes a channel.
+    func unmute() -> Observable<EmptyData> {
+        Client.shared.rx.unmute(channel: base)
     }
     
     /// Update channel data.
@@ -86,9 +95,11 @@ public extension Reactive where Base == Channel {
     // MARK: - Message
     
     /// Send a new message or update with a given `message.id`.
-    /// - Parameter message: a message.
-    func send(message: Message) -> Observable<MessageResponse> {
-        Client.shared.rx.send(message: message, to: base)
+    /// - Parameters:
+    ///   - message: a message.
+    ///   - parseMentionedUsers: whether to automatically parse mentions into the `message.mentionedUsers` property. Defaults to `true`.
+    func send(message: Message, parseMentionedUsers: Bool = true) -> Observable<MessageResponse> {
+        Client.shared.rx.send(message: message, to: base, parseMentionedUsers: parseMentionedUsers)
     }
     
     /// Send a message action for a given ephemeral message.
@@ -214,6 +225,34 @@ public extension Reactive where Base == Channel {
         Client.shared.rx.rejectInvite(for: base, with: message)
     }
     
+    /// Query this channel's members.
+    /// - Parameters:
+    ///   - filter: Filter conditions for query
+    ///   - sorting: Sorting conditions for query
+    ///   - limit: Limit for number of members to return. Defaults to 100.
+    ///   - offset: Offset of pagination. Defaults to 0.
+    func queryMembers(filter: Filter,
+                      sorting: [Sorting] = [],
+                      limit: Int = 100,
+                      offset: Int = 0) -> Observable<MembersQueryResponse> {
+        let query: MembersQuery
+        if base.id.isEmpty {
+            query = MembersQuery(channelType: base.type,
+                                 members: Array(base.members),
+                                 filter: filter,
+                                 sorting: sorting,
+                                 limit: limit,
+                                 offset: offset)
+        } else {
+            query = MembersQuery(channelId: base.cid,
+                                 filter: filter,
+                                 sorting: sorting,
+                                 limit: limit,
+                                 offset: offset)
+        }
+        return Client.shared.rx.queryMembers(membersQuery: query)
+    }
+    
     // MARK: - Uploading
     
     /// Upload an image to the channel.
@@ -244,5 +283,24 @@ public extension Reactive where Base == Channel {
     /// - Parameter url: a file URL.
     func deleteFile(url: URL) -> Observable<EmptyData> {
         Client.shared.rx.deleteFile(url: url, channel: base)
+    }
+    
+    /// Enable slow mode for the channel
+    /// - Parameters:
+    ///   - channel: a channel.
+    ///   - cooldown: Cooldown duration in seconds. (1-120)
+    ///   - completion: an empty completion block.
+    @discardableResult
+    func enableSlowMode(cooldown: Int) -> Observable<EmptyData> {
+        Client.shared.rx.enableSlowMode(for: base, cooldown: cooldown)
+    }
+    
+    /// Disables slow mode for the channel
+    /// - Parameters:
+    ///   - channel: a channel.
+    ///   - completion: an empty completion block.
+    @discardableResult
+    func disableSlowMode() -> Observable<EmptyData> {
+        Client.shared.rx.disableSlowMode(for: base)
     }
 }

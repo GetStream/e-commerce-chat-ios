@@ -28,18 +28,16 @@ extension Client {
         
         let jsonData = try JSONEncoder.default.encode(jsonParameter)
         
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            urlComponents.queryItems?.append(URLQueryItem(name: "json", value: jsonString))
-        } else {
-            logger?.log("❌ Can't create a JSON parameter string from the json: \(jsonParameter)", level: .error)
-        }
-        
-        guard let url = urlComponents.url else {
+        guard
+            let url = urlComponents.url,
+            let jsonString = String(data: jsonData, encoding: .utf8)?.addingPercentEncoding(withAllowedCharacters: .alphanumerics),
+            let urlWithJson = URL(string: "\(url.absoluteString)&json=\(jsonString)")
+        else {
             logger?.log("❌ Bad URL: \(urlComponents)", level: .error)
             throw ClientError.invalidURL(urlComponents.description)
         }
-        
-        var request = URLRequest(url: url)
+
+        var request = URLRequest(url: urlWithJson)
         request.allHTTPHeaderFields = authHeaders(token: token)
         return request
     }
@@ -90,7 +88,8 @@ extension Client: WebSocketEventDelegate {
             
             return true
             
-        case .notificationMutesUpdated(let user, _, _):
+        case .notificationChannelMutesUpdated(let user, _),
+             .notificationMutesUpdated(let user, _, _):
             userAtomic.set(user)
             return true
             
@@ -107,7 +106,7 @@ extension Client: WebSocketEventDelegate {
             }
             return true
             
-        case let .messageNew(message, _, _, _) where message.user != user && user.isMuted(user: message.user):
+        case let .messageNew(message, _, _, _, _) where message.user != user && user.isMuted(user: message.user):
             // FIXIT: This shouldn't be by default.
             logger?.log("Skip a message (\(message.id)) from muted user (\(message.user.id)): \(message.textOrArgs)", level: .info)
             return false
@@ -130,6 +129,10 @@ extension Client: WebSocketEventDelegate {
     func shouldAutomaticallySendTypingStopEvent(for user: User) -> Bool {
         // Don't clean up current user's typing events
         self.user != user
+    }
+    
+    func disconnectedDueToExpiredToken() {
+        touchTokenProvider(isExpiredTokenInProgress: true, nil)
     }
 }
 

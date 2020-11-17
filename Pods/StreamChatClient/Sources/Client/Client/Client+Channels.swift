@@ -14,7 +14,7 @@ public extension Client {
     
     /// A message search. Creates a `SearchQuery` with given parameters and call `search` with it.
     /// - Parameters:
-    ///   - filter: a filter for channels, e.g. `"members".in(["john"])`
+    ///   - filter: a filter for channels, e.g. `.in("members", ["john"])`
     ///   - query: a search query.
     ///   - pagination: a pagination. It works via the standard limit and offset parameters.
     ///   - completion: a completion block with `[Message]`.
@@ -24,6 +24,20 @@ public extension Client {
                 pagination: Pagination = [.channelsPageSize],
                 _ completion: @escaping Client.Completion<[Message]>) -> Cancellable {
         search(query: SearchQuery(filter: filter, query: query, pagination: pagination), completion)
+    }
+    
+    /// A message search. Creates a `SearchQuery` with given parameters and call `search` with it.
+    /// - Parameters:
+    ///   - filter: a filter for channels, e.g. `.in("members", ["john"])`
+    ///   - messageFilter: a filter for messages, e.g. `.exists("attachments", true)`
+    ///   - pagination: a pagination. It works via the standard limit and offset parameters.
+    ///   - completion: a completion block with `[Message]`.
+    @discardableResult
+    func search(filter: Filter,
+                messageFilter: Filter,
+                pagination: Pagination = [.channelsPageSize],
+                _ completion: @escaping Client.Completion<[Message]>) -> Cancellable {
+        search(query: SearchQuery(filter: filter, messageFilter: messageFilter, pagination: pagination), completion)
     }
     
     /// A message search with a given query (see `SearchQuery`).
@@ -42,7 +56,8 @@ public extension Client {
     ///   - filter: a channels filter, e.g. "members".in([User.current])
     ///   - sort: a sorting list for channels.
     ///   - pagination: a channels pagination.
-    ///   - messagesLimit: a messages pagination for the each channel.
+    ///   - messagesLimit: a messages pagination for each channel.
+    ///   - membersLimit: a members limit for each channel.
     ///   - options: a query options (see `QueryOptions`).
     ///   - completion: a completion block with `Client.Completion<[ChannelResponse]`.
     @discardableResult
@@ -50,12 +65,14 @@ public extension Client {
                        sort: [Sorting] = [],
                        pagination: Pagination = [.channelsPageSize],
                        messagesLimit: Pagination = [.messagesPageSize],
+                       membersLimit: Int = 100,
                        options: QueryOptions = [],
                        _ completion: @escaping Client.Completion<[ChannelResponse]>) -> Cancellable {
         queryChannels(query: .init(filter: filter,
                                    sort: sort,
                                    pagination: pagination,
                                    messagesLimit: messagesLimit,
+                                   membersLimit: membersLimit,
                                    options: options),
                       completion)
     }

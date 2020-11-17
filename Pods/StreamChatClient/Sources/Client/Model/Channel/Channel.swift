@@ -38,6 +38,11 @@ public final class Channel: Codable {
         case members
         /// The team the channel belongs to.
         case team
+        /// The total number of members in the channel
+        case memberCount = "member_count"
+        /// Cooldown duration for the channel, if it's in slow mode.
+        /// This value will be 0 if the channel is not in slow mode.
+        case cooldownDuration = "cooldown"
     }
     
     /// Coding keys for the encoding.
@@ -71,8 +76,20 @@ public final class Channel: Codable {
     public let config: Config
     /// Checks if the channel is frozen.
     public let frozen: Bool
+    /// The current user is a member of the channel. If not, it will be nil.
+    public internal(set) var membership: Member?
     /// A list of channel members.
     public internal(set) var members = Set<Member>()
+    
+    /// A members count.
+    public var memberCount: Int { memberCountAtomic.get() }
+    
+    private(set) lazy var memberCountAtomic = Atomic<Int>(0, callbackQueue: .main) { [weak self] _, _ in
+        if let self = self {
+            self.onUpdate?(self)
+        }
+    }
+    
     /// A list of channel watchers.
     public internal(set) var watchers = Set<User>()
     /// A list of users to invite in the channel.
@@ -85,9 +102,12 @@ public final class Channel: Codable {
     /// Check if the channel was deleted.
     public var isDeleted: Bool { deleted != nil }
     /// Checks if read events evalable for the current user.
-    public var readEventsEnabled: Bool { config.readEventsEnabled && members.contains(Member.current) }
+    public var readEventsEnabled: Bool { config.readEventsEnabled && membership != nil }
     /// Returns the current unread count.
     public var unreadCount: ChannelUnreadCount { unreadCountAtomic.get() }
+    /// Cooldown duration for the channel, if it's in slow mode.
+    /// This value will be 0 if the channel is not in slow mode.
+    public let cooldownDuration: Int
     
     private(set) lazy var unreadCountAtomic = Atomic<ChannelUnreadCount>(.noUnread, callbackQueue: .main) { [weak self] _, _ in
         if let self = self {
@@ -120,8 +140,12 @@ public final class Channel: Codable {
     public let didLoad: Bool
     /// Checks if the channel is watching by the client.
     public var isWatched: Bool { Client.shared.isWatching(channel: self) }
+    /// Naming strategy to generate a name and image for the channel based on members.
+    /// Only takes effect when `extraData` is `nil`.
+    public var namingStrategy: ChannelNamingStrategy? = DefaultNamingStrategy(maxUserNames: 1)
     
     private var subscriptionBag = SubscriptionBag()
+    private lazy var nameAndImageForCurrentUser = ChannelExtraData(name: extraData?.name, imageURL: extraData?.imageURL)
     
     let currentUserTypingLastDateAtomic = Atomic<Date?>()
     let currentUserTypingTimerControlAtomic = Atomic<TimerControl?>()
@@ -143,6 +167,7 @@ public final class Channel: Codable {
                 lastMessageDate: Date?,
                 frozen: Bool,
                 team: String = "",
+                namingStrategy: ChannelNamingStrategy? = DefaultNamingStrategy(maxUserNames: 1),
                 config: Config) {
         self.type = type
         self.id = id
@@ -156,8 +181,11 @@ public final class Channel: Codable {
         self.lastMessageDate = lastMessageDate
         self.frozen = frozen
         self.team = team
+        self.namingStrategy = namingStrategy
         self.config = config
+        cooldownDuration = 0
         didLoad = false
+        memberCountAtomic.set(members.count)
     }
     
     public required init(from decoder: Decoder) throws {
@@ -177,8 +205,10 @@ public final class Channel: Codable {
         lastMessageDate = try container.decodeIfPresent(Date.self, forKey: .lastMessageDate)
         frozen = try container.decode(Bool.self, forKey: .frozen)
         team = try container.decodeIfPresent(String.self, forKey: .team) ?? ""
+        cooldownDuration = try container.decodeIfPresent(Int.self, forKey: .cooldownDuration) ?? 0
         didLoad = true
         extraData = Channel.decodeChannelExtraData(from: decoder)
+        memberCountAtomic.set(try container.decodeIfPresent(Int.self, forKey: .memberCount) ?? members.count)
     }
     
     /// Safely decode channel extra data and if it fail try to decode only default properties: name, imageURL.
@@ -211,7 +241,7 @@ public final class Channel: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: EncodingKeys.self)
         extraData?.encodeSafely(to: encoder, logMessage: "📦 when encoding a channel extra data")
-      
+        
         try container.encode(team, forKey: .team)
         
         var allMembers = members
@@ -297,11 +327,17 @@ extension Channel {
     /// A channel name.
     public var name: String? {
         get {
-            extraData?.name
+            if nameAndImageForCurrentUser.name == nil, let namingStrategy = namingStrategy {
+                // Save generated name to nameAndImageForCurrentUser since there isn't any
+                nameAndImageForCurrentUser.name = namingStrategy.name(for: User.current,
+                                                                      members: members.map(\.user))
+            }
+            return nameAndImageForCurrentUser.name
         }
         set {
             var object: ChannelExtraDataCodable = extraData ?? ChannelExtraData()
             object.name = newValue
+            nameAndImageForCurrentUser.name = newValue
             extraData = object
         }
     }
@@ -309,11 +345,17 @@ extension Channel {
     /// An image of the channel.
     public var imageURL: URL? {
         get {
-            extraData?.imageURL
+            if nameAndImageForCurrentUser.imageURL == nil, let namingStrategy = namingStrategy {
+                // Save generated imageURL to nameAndImageForCurrentUser since there isn't any
+                nameAndImageForCurrentUser.imageURL = namingStrategy.imageURL(for: User.current,
+                                                                              members: members.map(\.user))
+            }
+            return nameAndImageForCurrentUser.imageURL
         }
         set {
             var object: ChannelExtraDataCodable = extraData ?? ChannelExtraData()
             object.imageURL = newValue
+            nameAndImageForCurrentUser.imageURL = newValue
             extraData = object
         }
     }
@@ -396,4 +438,11 @@ public struct HiddenChannelResponse: Decodable, Equatable {
     public let clearHistory: Bool
     /// An event created date.
     public let created: Date
+}
+
+// MARK: - Hashable
+extension Channel: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(cid)
+    }
 }

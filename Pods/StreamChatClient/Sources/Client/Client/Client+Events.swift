@@ -148,12 +148,12 @@ extension Client {
         guard isWatching(channel: channel) else {
             logger?.log("⚠️ You are trying to subscribe for the channel unread count: (\(channel.cid)), "
                 + "but you didn't start watching it. Please make a query with "
-                + "messages pagination: `[.limit(100)]` and query options: `[.watch, .state]`: "
-                + "`channel.query(messagesPagination: [.limit(100)], options: [.watch, .state])`")
+                + "messages pagination: `[.limit(1)]` and query options: `[.watch, .state]`: "
+                + "`channel.query(messagesPagination: [.limit(1)], options: [.watch, .state])`")
             return Subscription.empty
         }
         
-        let subscription = subscribe(forEvents: [.messageNew, .messageRead, .messageDeleted], cid: channel.cid) { _ in
+        let subscription = subscribe(forEvents: [.messageNew, .messageRead], cid: channel.cid) { _ in
             callback(.success(channel.unreadCount))
         }
         

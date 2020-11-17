@@ -17,7 +17,7 @@ public struct Device: Codable, Equatable {
     /// A device identifier.
     public let id: String
     /// A created date.
-    public let created: Date
+    public let created: Date?
     
     /// Init a device for Push Notifications.
     ///
@@ -27,6 +27,12 @@ public struct Device: Codable, Equatable {
     public init(_ id: String, created: Date = .init()) {
         self.id = id
         self.created = created
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        created = try container.decodeIfPresent(Date.self, forKey: .created)
     }
 }
 

@@ -12,6 +12,9 @@ import Foundation
 public enum Endpoint {
     
     // MARK: Auth Endpoints
+
+    /// An endpoint without any side-effects. Used only to set up a TCP connection which can be later reused by other requests.
+    case heatUpTCPConnection
     
     /// Get a guest token.
     case guestToken(User)
@@ -51,6 +54,10 @@ public enum Endpoint {
     case hideChannel(Channel, User, _ clearHistory: Bool)
     /// Show a channel if it was hidden.
     case showChannel(Channel, User)
+    /// Mute a channel.
+    case muteChannel(Channel)
+    /// Unmute a channel.
+    case unmuteChannel(Channel)
     /// Send a message to a channel.
     case sendMessage(Message, Channel)
     /// Upload an image to a channel.
@@ -71,10 +78,14 @@ public enum Endpoint {
     case addMembers(Set<Member>, Channel)
     /// Remove members to the channel
     case removeMembers(Set<Member>, Channel)
+    /// Query members
+    case queryMembers(MembersQuery)
     /// Invite members.
     case invite(Set<Member>, Channel)
     /// Send an answer for an invite.
     case inviteAnswer(ChannelInviteAnswer)
+    /// Enable slowmode
+    case enableSlowMode(Channel, _ cooldown: Int)
     
     // MARK: - Message Endpoints
     
@@ -99,7 +110,7 @@ public enum Endpoint {
     case users(UsersQuery)
     /// Update a user.
     case updateUsers([User])
-    /// Mute a use.
+    /// Mute a user.
     case muteUser(User)
     /// Unmute a user.
     case unmuteUser(User)
@@ -116,10 +127,12 @@ public enum Endpoint {
 extension Endpoint {
     var method: Method {
         switch self {
-        case .search, .channels, .message, .replies, .users, .devices:
+        case .search, .channels, .message, .replies, .users, .devices, .queryMembers:
             return .get
         case .removeDevice, .deleteChannel, .deleteMessage, .deleteReaction, .deleteImage, .deleteFile, .unban:
             return .delete
+        case .heatUpTCPConnection:
+            return .options
         default:
             return .post
         }
@@ -127,6 +140,8 @@ extension Endpoint {
     
     var path: String {
         switch self {
+        case .heatUpTCPConnection:
+            return "connect"
         case .guestToken:
             return "guest"
         case .addDevice,
@@ -158,6 +173,14 @@ extension Endpoint {
             return path(to: channel, "show")
         case .hideChannel(let channel, _, _):
             return path(to: channel, "hide")
+        case .muteChannel:
+            return "moderation/mute/channel"
+        case .unmuteChannel:
+            return "moderation/unmute/channel"
+        case .queryMembers:
+            return "members"
+        case .enableSlowMode(let channel, _):
+            return path(to: channel)
         case .replies(let message, _):
             return path(to: message.id, "replies")
             
@@ -212,7 +235,13 @@ extension Endpoint {
         case .removeDevice(deviceId: let deviceId, let user):
             return ["id": deviceId, "user_id": user.id]
         case .replies(_, let pagination):
-            return pagination
+            let paginationOptions: [(String, Encodable)] = pagination
+                .flatMap({ $0.parameters })
+                .compactMap({
+                    guard let value = $1 as? Encodable else { return nil }
+                    return ($0, value)
+                })
+            return Dictionary(paginationOptions.map({ ($0, AnyEncodable($1)) }), uniquingKeysWith: { $1 })
         case .deleteImage(let url, _), .deleteFile(let url, _):
             return ["url": url]
         case .unban(let userBan):
@@ -232,6 +261,8 @@ extension Endpoint {
             payload = query
         case .users(let query):
             payload = query
+        case .queryMembers(let membersQuery):
+            payload = membersQuery
         default:
             return nil
         }
@@ -241,7 +272,8 @@ extension Endpoint {
     
     var body: Encodable? {
         switch self {
-        case .removeDevice,
+        case .heatUpTCPConnection,
+             .removeDevice,
              .search,
              .channels,
              .message,
@@ -254,7 +286,8 @@ extension Endpoint {
              .deleteImage,
              .deleteFile,
              .users,
-             .unban:
+             .unban,
+             .queryMembers:
             return nil
             
         case .markAllRead,
@@ -264,6 +297,9 @@ extension Endpoint {
             
         case .updateChannel(let channelUpdate):
             return channelUpdate
+            
+        case .enableSlowMode(_, let cooldown):
+            return ["cooldown": cooldown]
             
         case .guestToken(let user):
             return ["user": user]
@@ -277,11 +313,14 @@ extension Endpoint {
         case .channel(let query):
             return query
             
+        case .hideChannel(_, let user, let clearHistory):
+            return HiddenChannelRequest(userId: user.id, clearHistory: clearHistory)
+            
         case .showChannel(_, let user):
             return ["user_id": user.id]
             
-        case .hideChannel(_, let user, let clearHistory):
-            return HiddenChannelRequest(userId: user.id, clearHistory: clearHistory)
+        case .muteChannel(let channel), .unmuteChannel(let channel):
+            return ["channel_cid": channel.cid]
             
         case .sendMessage(let message, _):
             return ["message": message]
@@ -352,9 +391,12 @@ extension Endpoint {
         case .channel(let query):
             return query.options.contains(.presence) || query.options.contains(.state)
         case .updateUsers,
-             .stopWatching:
+             .stopWatching,
+             .muteChannel,
+             .unmuteChannel:
             return true
-        case .guestToken,
+        case .heatUpTCPConnection,
+             .guestToken,
              .message,
              .markAllRead,
              .deleteChannel,
@@ -374,6 +416,8 @@ extension Endpoint {
              .devices,
              .search,
              .updateChannel,
+             .queryMembers,
+             .enableSlowMode,
              .showChannel,
              .hideChannel,
              .sendMessage,
@@ -410,5 +454,6 @@ extension Endpoint {
         case get = "GET"
         case post = "POST"
         case delete = "DELETE"
+        case options = "OPTIONS"
     }
 }

@@ -189,11 +189,9 @@ extension ChatViewController {
             composerEditingContainerView.animate(show: false)
         }
         
-        // We don't want users to send the same message multiple times
-        // in case their internet is slow and message isn't sent immediately
-        composerView.sendButton.isEnabled = false
-        
-        presenter?.rx.send(text: text, showReplyInChannel: composerView.alsoSendToChannelButton.isSelected)
+        presenter?.rx.send(text: text,
+                           showReplyInChannel: composerView.alsoSendToChannelButton.isSelected,
+                           parseMentionedUsers: parseMentionedUsersOnSend)
             .subscribe(
                 onNext: { [weak self] messageResponse in
                     if messageResponse.message.type == .error {
@@ -201,11 +199,13 @@ extension ChatViewController {
                     }
                 },
                 onError: { [weak self] in
-                    self?.composerView.reset()
                     self?.show(error: $0)
-                },
-                onCompleted: { [weak self] in self?.composerView.reset() })
+                })
             .disposed(by: disposeBag)
+        
+        // We don't want users to send the same message multiple times
+        // in case their internet is slow and message isn't sent immediately
+        composerView.reset()
     }
     
     private func findCommand(in text: String) -> String? {
@@ -568,4 +568,4 @@ extension ChatViewController {
             .subscribe()
             .disposed(by: disposeBag)
     }
-} // swiftlint:disable:this file_length
+}

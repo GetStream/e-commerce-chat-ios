@@ -14,21 +14,24 @@ extension Client {
     // MARK: URL Session Setup
     
     func makeURLSession(token: Token = "") -> URLSession {
-        let headers = authHeaders(token: token)
-        logger?.log(headers: headers)
         let config = defaultURLSessionConfiguration
         config.waitsForConnectivity = true
+        config.httpShouldUsePipelining = true
+        
+        let headers = authHeaders(token: token)
         let oldHeaders = config.httpAdditionalHeaders ?? [:]
         config.httpAdditionalHeaders = oldHeaders.merging(headers, uniquingKeysWith: { (_, new) in new })
+        logger?.log(headers: (config.httpAdditionalHeaders as? [String: String]) ?? [:])
+        
         return URLSession(configuration: config, delegate: urlSessionTaskDelegate, delegateQueue: nil)
     }
     
     func authHeaders(token: Token) -> [String: String] {
         var headers = [
-            "X-Stream-Client": "stream-chat-swift-client-\(Environment.version)",
-            "X-Stream-Device": Environment.deviceModelName,
-            "X-Stream-OS": Environment.systemName,
-            "X-Stream-App-Environment": Environment.name]
+            "X-Stream-Client": "stream-chat-swift-client-\(Environment.version)"
+                + "|\(Environment.deviceModelName)" // Device
+                + "|\(Environment.systemName)" // OS version
+                + "|\(Environment.name)"] // Environment name: development X productio
         
         if token.isBlank || user.isAnonymous {
             headers["Stream-Auth-Type"] = "anonymous"
@@ -54,8 +57,10 @@ extension Client {
     /// - Returns: an URLSessionTask that can be canncelled.
     @discardableResult
     func request<T: Decodable>(endpoint: Endpoint, _ completion: @escaping Completion<T>) -> Cancellable {
-        let task = prepareRequest(endpoint: endpoint, completion)
+        let loggerTaskId = UUID()
+        let task = prepareRequest(endpoint: endpoint, loggerTaskId: loggerTaskId, completion)
         task?.resume()
+        logger?.logTaskStarted("URL request to /\(endpoint.path)", taskId: loggerTaskId)
         return Subscription { _  in task?.cancel() }
     }
     
@@ -70,36 +75,56 @@ extension Client {
     func request<T: Decodable>(endpoint: Endpoint,
                                progress: @escaping Progress,
                                completion: @escaping Completion<T>) -> Cancellable {
-        let task = prepareRequest(endpoint: endpoint, completion)
+        let loggerTaskId = UUID()
+        let task = prepareRequest(endpoint: endpoint, loggerTaskId: loggerTaskId, completion)
+        
         if let taskIdentifier = task?.taskIdentifier {
             urlSessionTaskDelegate.addProgessHandler(id: taskIdentifier, progress)
         }
+        
         task?.resume()
+        logger?.logTaskStarted("URL request to /\(endpoint.path)", taskId: loggerTaskId)
+        
         return Subscription { _  in task?.cancel() }
     }
     
-    private func prepareRequest<T: Decodable>(endpoint: Endpoint, _ completion: @escaping Completion<T>) -> URLSessionTask? {
+    /// Synchronously creates a new `URLRequest` with the data from the `Endpoint`. It also adds all required data
+    /// like an api key, etc.
+    /// - Parameter endpoint: The `Endpoint` to be encoded.
+    /// - Returns: a URLRequest for the given endpoint
+    func encodeRequest(for endpoint: Endpoint) throws -> URLRequest {
+        let queryItems = try self.queryItems(for: endpoint).get()
+        let url = try requestURL(for: endpoint, queryItems: queryItems).get()
+        
+        return try endpoint.isUploading
+            ? encodeRequestForUpload(for: endpoint, url: url).get()
+            : encodeRequest(for: endpoint, url: url).get()
+    }
+    
+    private func prepareRequest<T: Decodable>(endpoint: Endpoint,
+                                              loggerTaskId: UUID? = nil,
+                                              _ completion: @escaping Completion<T>) -> URLSessionTask? {
         if let logger = logger {
-            logger.log("Request: \(String(describing: endpoint).prefix(100))...", level: .debug)
+            logger.log("Preparing a \(endpoint.method.rawValue.uppercased()) request to /\(endpoint.path)...", level: .debug)
         }
         
         if isExpiredTokenInProgress {
+            logger?.log("The token was expired. Add the request to a waiting list", level: .debug)
             addWaitingRequest(endpoint: endpoint, completion)
             return nil
         }
         
         do {
             let task: URLSessionDataTask
-            let queryItems = try self.queryItems(for: endpoint).get()
-            let url = try requestURL(for: endpoint, queryItems: queryItems).get()
+            let urlRequest = try self.encodeRequest(for: endpoint)
             
-            let urlRequest = try endpoint.isUploading
-                ? encodeRequestForUpload(for: endpoint, url: url).get()
-                : encodeRequest(for: endpoint, url: url).get()
-            
-            task = urlSession.dataTask(with: urlRequest) { [unowned self] in
+            task = urlSession.dataTask(with: urlRequest) { [unowned self] data, response, error in
+                self.logger?.logTaskFinished(taskId: loggerTaskId)
+                
                 // Parse the response.
-                self.parse(data: $0, response: $1, error: $2, completion: completion)
+                let parsingloggerTaskId = self.logger?.logTaskStarted("Parsing the JSON response from /\(endpoint.path)")
+                self.parse(data: data, response: response, error: error, completion: completion)
+                self.logger?.logTaskFinished(taskId: parsingloggerTaskId)
                 
                 // Check expired Token on the request.
                 if self.isExpiredTokenInProgress {
@@ -341,7 +366,7 @@ extension Client {
             }
             do {
                 let podTrunk = try JSONDecoder().decode(PodTrunk.self, from: data)
-                if let latestVersion = podTrunk.versions.last?.name, latestVersion > Environment.version {
+                if let latestVersion = podTrunk.versions.last?.name, latestVersion > Environment.version, latestVersion < "3" {
                     ClientLogger.log("📢",
                                      "",
                                      .info,
